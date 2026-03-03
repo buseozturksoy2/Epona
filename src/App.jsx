@@ -141,7 +141,7 @@ export function App() {
     setAuthLoading(true);
     try {
       // E-posta girilmezse projenizdeki yapıya göre default domain ekliyoruz
-      const email = username.includes('@') ? username : `${username}@local.minicrm`;
+      const email = username.includes('@') ? username : `${username}@local.eponacrm`;
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error || !data.user) {
