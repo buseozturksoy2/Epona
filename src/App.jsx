@@ -269,7 +269,7 @@ export function App() {
     const link = document.createElement("a");
     
     link.setAttribute("href", url);
-    link.setAttribute("download", `denteste_leads_${new Date().toLocaleDateString('tr-TR')}.csv`);
+    link.setAttribute("download", `epona_leads_${new Date().toLocaleDateString('tr-TR')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -375,9 +375,9 @@ export function App() {
         <div className="p-8 bg-white rounded-2xl shadow-xl w-96 border border-gray-100">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-200">
-              <span className="text-white font-bold text-2xl">D</span>
+              <span className="text-white font-bold text-2xl">E</span>
             </div>
-            <h1 className="text-2xl font-bold text-gray-800">Denteste CRM</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Epona CRM</h1>
             <p className="text-gray-500 text-sm mt-1">Lütfen giriş yapın</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
@@ -405,9 +405,9 @@ export function App() {
       <aside className="w-64 bg-slate-800 text-gray-300 flex flex-col border-r border-slate-900 z-30 shrink-0">
         <div className="h-14 flex items-center px-4 border-b border-slate-700 bg-slate-900">
           <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center mr-3 shadow-sm">
-            <span className="text-white font-bold text-xs">D</span>
+            <span className="text-white font-bold text-xs">E</span>
           </div>
-          <h1 className="text-sm font-semibold text-white tracking-wide">Denteste-CRM</h1>
+          <h1 className="text-sm font-semibold text-white tracking-wide">Epona-CRM</h1>
         </div>
         
         <nav className="flex-1 py-4">
