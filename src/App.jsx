@@ -720,8 +720,9 @@ export function App() {
                                 </div>
                                 {/* Yeni: Dosya Linki Görünümü */}
                                 {l.quote_file_url && (
-                                  <a href={l.quote_file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-1 underline w-max" onClick={(e) => e.stopPropagation()}>
-                                    <FileText size={10} /> Dosyayı Gör
+                                  <a href={l.quote_file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-1 underline max-w-[150px]" title={l.quote_file_name} onClick={(e) => e.stopPropagation()}>
+                                    <FileText size={10} className="shrink-0" /> 
+                                    <span className="truncate">{l.quote_file_name || "Dosyayı Gör"}</span>
                                   </a>
                                 )}
                               </div>
@@ -813,7 +814,7 @@ export function App() {
                               <button onClick={() => { setUserForm({ id: u.id, username: u.username, role: u.role, active: u.active }); setIsUserModalOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded border border-transparent hover:border-blue-200 transition-colors" title="Kullanıcıyı Düzenle">
                                 <Edit size={16} />
                               </button>
-                              <button onClick={() => handleToggleUserStatus(u)} className={`p-1.5 rounded border border-transparent transition-colors ${u.active ? 'text-amber-600 hover:bg-amber-100 hover:border-amber-200' : 'textemerald-600 hover:bg-emerald-100 hover:border-emerald-200'}`} title={u.active ? "Pasife Al (Erişimi Kes)" : "Aktif Et (Erişim Ver)"}>
+                              <button onClick={() => handleToggleUserStatus(u)} className={`p-1.5 rounded border border-transparent transition-colors ${u.active ? 'text-amber-600 hover:bg-amber-100 hover:border-amber-200' : 'text-emerald-600 hover:bg-emerald-100 hover:border-emerald-200'}`} title={u.active ? "Pasife Al (Erişimi Kes)" : "Aktif Et (Erişim Ver)"}>
                                 {u.active ? <PowerOff size={16} /> : <Power size={16} />}
                               </button>
                               <button onClick={() => handleDeleteUser(u.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded border border-transparent hover:border-red-200 transition-colors" title="Kalıcı Olarak Sil">
@@ -997,12 +998,19 @@ export function App() {
                                 <span className="inline-block text-gray-500 text-[10px] font-medium">{new Date(n.note_date).toLocaleDateString('tr-TR')}</span>
                               </div>
                             )}
-                            <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{n.text}</p>
+                            
+                            {/* Sadece dosya yükleme notu DEĞİLSE paragrafı gösterelim ki aynı isim tekrar etmesin */}
+                            {n.note_type !== "Dosya Yüklendi" && (
+                                <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{n.text}</p>
+                            )}
                             
                             {/* GEÇMİŞTEKİ DOSYAYI GÖRÜNTÜLEME ALANI */}
                             {n.file_url && (
-                                <a href={n.file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-2 p-1.5 bg-blue-50 rounded border border-blue-100 w-max" onClick={(e) => e.stopPropagation()}>
-                                  <FileText size={12} /> Dosyayı Görüntüle
+                                <a href={n.file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center gap-1.5 mt-2 p-1.5 bg-blue-50 rounded border border-blue-100 w-max max-w-[220px]" title="Dosyayı İndir/Görüntüle" onClick={(e) => e.stopPropagation()}>
+                                  <FileText size={12} className="shrink-0" /> 
+                                  <span className="truncate font-medium">
+                                    {n.text && n.text.includes('Yeni bir dosya yüklendi: ') ? n.text.replace('Yeni bir dosya yüklendi: ', '') : 'Ekli Dosya'}
+                                  </span>
                                 </a>
                             )}
                           </div>
