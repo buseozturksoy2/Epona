@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 // =========================================================================
-// 🚀 CANLI ORTAMA (Vercel/GitHub) YÜKLERKEN AŞAĞIDAKİ YORUMU KALDIRIN:
-import { supabase } from "./supabaseClient"; 
+// 🚀 ÖNİZLEME ORTAMI İÇİN MOCK SUPABASE İSTEMCİSİ (HATA ÇÖZÜMÜ İÇİN EKLENDİ)
+// Vercel/GitHub'a yüklerken buradaki 'mock' yapıyı silip, kendi supabaseClient importunuzu kullanın:
+import { supabase } from "./supabaseClient";
+
 // =========================================================================
 import { 
   LayoutDashboard, 
@@ -24,14 +26,15 @@ import {
   Power,
   PowerOff,
   Filter,
-  Info
+  Info,
+  Mail,
+  Building,
+  Briefcase
 } from "lucide-react";
 
 // --- CONSTANTS ---
-const LEAD_SOURCES = ["Facebook Reklam", "Direk Arama", "Referans", "Direk Mesaj-Instagram", "Eski Data"];
 const LEAD_STATUSES = ["Yeni", "Cevapsız", "Sıcak", "Satış", "İptal", "Yabancı", "Türk", "Düşünüp Geri Dönüş Sağlayacak", "İletişimde", "İstanbul Dışı", "Randevu Verilen", "Randevu Gelen", "Randevu Gelmeyen", "Yanlış Başvuru"];
 const LEAD_STAGES = ["Çok Uzak", "Çok Pahalı", "Şişli Uzak", "Diğer"];
-const LANGUAGES = ["TR", "EN", "DE", "FR", "AR"];
 
 const QUICK_FILTERS = [
   { id: "Sıcak", label: "🔥 Sıcak" },
@@ -42,8 +45,23 @@ const QUICK_FILTERS = [
 ];
 
 function createEmptyLead(ownerId) {
-  return { id: null, name: "", language: "TR", phone: "", source: "Facebook Reklam", status: "Yeni", stage: "Diğer", owner_id: ownerId || "", quote: "", pendingNote: "", notes: [] };
+  return { 
+    id: null, 
+    name: "", 
+    phone: "", 
+    mailAdresi: "", 
+    kurum: "", 
+    kurumGorevi: "", 
+    kurumTelNo: "", 
+    status: "Yeni", 
+    stage: "Diğer", 
+    owner_id: ownerId || "", 
+    quote: "", 
+    pendingNote: "", 
+    notes: [] 
+  };
 }
+
 function createEmptyUser() {
   return { id: null, username: "", active: true, role: "sales" };
 }
@@ -58,8 +76,6 @@ export function App() {
   const [leads, setLeads] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("Tümü");
-  const [filterLanguage, setFilterLanguage] = useState("Tümü");
-  const [filterSource, setFilterSource] = useState("Tümü");
   const [quickFilter, setQuickFilter] = useState(""); 
   
   const [selectedLeadIds, setSelectedLeadIds] = useState([]);
@@ -110,7 +126,6 @@ export function App() {
   };
 
   const fetchUsers = async (sessionId) => {
-    // profiles tablosunda artık name değil username olduğu için sıralamayı username'e göre yapıyoruz.
     const { data, error } = await supabase.from('profiles').select('*').order('username');
     
     if (error) {
@@ -140,7 +155,6 @@ export function App() {
 
     setAuthLoading(true);
     try {
-      // E-posta girilmezse projenizdeki yapıya göre default domain ekliyoruz
       const email = username.includes('@') ? username : `${username}@local.eponacrm`;
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
@@ -160,6 +174,11 @@ export function App() {
   const handlePhoneChange = (val) => {
     const cleaned = val.replace(/\D/g, '');
     setLeadForm({ ...leadForm, phone: cleaned });
+  };
+
+  const handleKurumPhoneChange = (val) => {
+    const cleaned = val.replace(/\D/g, '');
+    setLeadForm({ ...leadForm, kurumTelNo: cleaned });
   };
 
   const handleDeleteLead = async (id) => {
@@ -215,7 +234,6 @@ export function App() {
 
     const currentLeadId = savedLead?.id || id;
 
-    // Yeni not varsa lead_notes tablosuna ekle (author_id kolonunu kullanarak)
     if (pendingNote && pendingNote.trim() !== "" && currentLeadId) {
       const { error: noteError } = await supabase.from('lead_notes').insert([{
         lead_id: currentLeadId,
@@ -253,11 +271,11 @@ export function App() {
       return; 
     }
     
-    const headers = ["İsim,Telefon,Dil,Kaynak,Durum,Alt Durum,Teklif,Sahibi,Tarih"];
+    const headers = ["İsim,Telefon,Mail Adresi,Kurum,Kurum Görevi,Kurum Tel No,Durum,Alt Durum,Teklif,Sahibi,Tarih"];
     const rows = filteredLeads.map(l => {
       const ownerObj = appUsers.find(u => u.id === l.owner_id);
       const ownerName = ownerObj ? ownerObj.username : "Atanmamış";
-      return `${l.name || ''},${l.phone || ''},${l.language || ''},${l.source || ''},${l.status || ''},${l.stage || ''},${l.quote || ''},${ownerName},${l.created_at || ''}`;
+      return `${l.name || ''},${l.phone || ''},${l.mailAdresi || ''},${l.kurum || ''},${l.kurumGorevi || ''},${l.kurumTelNo || ''},${l.status || ''},${l.stage || ''},${l.quote || ''},${ownerName},${l.created_at || ''}`;
     });
     
     const csvData = headers.concat(rows).join("\n");
@@ -277,10 +295,13 @@ export function App() {
 
   const filteredLeads = useMemo(() => {
     return leads.filter(l => {
-      const matchSearch = (l.name?.toLowerCase().includes(searchQuery.toLowerCase()) || l.phone?.toString().includes(searchQuery));
+      const matchSearch = (
+        l.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        l.phone?.toString().includes(searchQuery) ||
+        l.kurum?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        l.mailAdresi?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
       const matchStatus = filterStatus === "Tümü" || l.status === filterStatus;
-      const matchLanguage = filterLanguage === "Tümü" || l.language === filterLanguage;
-      const matchSource = filterSource === "Tümü" || l.source === filterSource;
       
       let matchQuick = true;
       if (quickFilter) {
@@ -302,15 +323,14 @@ export function App() {
         }
       }
       
-      return matchSearch && matchStatus && matchLanguage && matchSource && matchQuick;
+      return matchSearch && matchStatus && matchQuick;
     });
-  }, [leads, searchQuery, filterStatus, filterLanguage, filterSource, quickFilter]);
+  }, [leads, searchQuery, filterStatus, quickFilter]);
 
   // --- USER FUNCTIONS ---
   const handleSaveUser = async () => {
     if (currentUser?.role !== 'admin') return;
     
-    // Yalnızca profiles tablosunda var olan kolonları gönderiyoruz.
     const profileData = {
       username: userForm.username,
       role: userForm.role,
@@ -339,7 +359,7 @@ export function App() {
 
   const handleToggleUserStatus = async (user) => {
     if (currentUser?.role !== 'admin') return;
-    const newStatus = !user.active; // boolean toggle
+    const newStatus = !user.active; 
     if(!window.confirm(`Kullanıcı durumunu '${newStatus ? 'Aktif' : 'Pasif'}' olarak değiştirmek istediğinize emin misiniz?`)) return;
     
     await supabase.from('profiles').update({ active: newStatus }).match({ id: user.id });
@@ -510,10 +530,10 @@ export function App() {
               {/* DETAYLI FILTERS */}
               <div className="bg-white p-4 rounded border border-gray-200 shadow-sm flex flex-wrap gap-4 items-end">
                 <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Arama</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Kapsamlı Arama</label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-                    <input type="text" placeholder="İsim, Tel..." className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                    <input type="text" placeholder="İsim, Tel, Kurum veya Mail..." className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                   </div>
                 </div>
                 <div className="w-full sm:w-48">
@@ -521,20 +541,6 @@ export function App() {
                   <select className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                     <option value="Tümü">Tümü</option>
                     {LEAD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div className="w-full sm:w-32">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Dil</label>
-                  <select className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={filterLanguage} onChange={e => setFilterLanguage(e.target.value)}>
-                    <option value="Tümü">Tümü</option>
-                    {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                </div>
-                <div className="w-full sm:w-48">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Kaynak</label>
-                  <select className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={filterSource} onChange={e => setFilterSource(e.target.value)}>
-                    <option value="Tümü">Tümü</option>
-                    {LEAD_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
@@ -561,10 +567,11 @@ export function App() {
                           <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" checked={selectedLeadIds.length === filteredLeads.length && filteredLeads.length > 0} onChange={handleSelectAll} />
                         </th>
                         <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 border-r border-gray-200">Müşteri</th>
-                        <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 border-r border-gray-200">İletişim</th>
-                        <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 border-r border-gray-200">Dil / Kaynak</th>
-                        <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 border-r border-gray-200">Durum / Aşama</th>
-                        <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 border-r border-gray-200">Teklif</th>
+                        <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 border-r border-gray-200">Kişisel İletişim</th>
+                        <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 border-r border-gray-200">Mail Adresi</th>
+                        <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 border-r border-gray-200">Kurum Adı</th>
+                        <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 border-r border-gray-200">Kurum Numarası</th>
+                        <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 border-r border-gray-200">Teklif Durumu</th>
                         <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 border-r border-gray-200">Temsilci</th>
                         <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 sticky right-0 bg-gray-100 z-10 border-l border-gray-300 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.05)] text-center w-28">İşlemler</th>
                       </tr>
@@ -579,20 +586,34 @@ export function App() {
                             <div className="text-sm font-medium text-gray-900">{l.name}</div>
                             <div className="text-[10px] text-gray-400">{new Date(l.created_at).toLocaleDateString('tr-TR')}</div>
                           </td>
-                          <td className="px-4 py-2 border-r border-gray-100 text-sm text-gray-600">{l.phone}</td>
                           <td className="px-4 py-2 border-r border-gray-100">
-                            <div className="text-xs text-gray-800 font-medium">{l.language}</div>
-                            <div className="text-[10px] text-gray-500">{l.source}</div>
+                            <div className="text-sm text-gray-600">{l.phone || "-"}</div>
                           </td>
                           <td className="px-4 py-2 border-r border-gray-100">
-                            <div className="flex flex-col gap-1 items-start">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${l.status === 'Yeni' ? 'bg-blue-100 text-blue-800 border border-blue-200' : l.status === 'Sıcak' ? 'bg-amber-100 text-amber-800 border border-amber-200' : l.status === 'İptal' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
-                                {l.status}
-                              </span>
-                              <span className="text-[10px] text-gray-500 truncate w-full">{l.stage}</span>
+                            <div className="text-sm text-gray-600">{l.mailAdresi || "-"}</div>
+                          </td>
+                          <td className="px-4 py-2 border-r border-gray-100">
+                            <div className="text-xs text-gray-800 font-medium">{l.kurum || "-"}</div>
+                            <div className="text-[10px] text-gray-500">{l.kurumGorevi || "-"}</div>
+                          </td>
+                          <td className="px-4 py-2 border-r border-gray-100">
+                            <div className="text-sm text-gray-600 flex items-center gap-1.5">
+                              {l.kurumTelNo ? <><Phone size={12} className="text-gray-400"/> {l.kurumTelNo}</> : "-"}
                             </div>
                           </td>
-                          <td className="px-4 py-2 border-r border-gray-100 text-sm font-semibold text-emerald-600">{l.quote || "-"}</td>
+                          <td className="px-4 py-2 border-r border-gray-100">
+                            <div className="flex flex-col gap-1.5 items-start">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${l.status === 'Yeni' ? 'bg-blue-100 text-blue-800 border border-blue-200' : l.status === 'Sıcak' ? 'bg-amber-100 text-amber-800 border border-amber-200' : l.status === 'İptal' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
+                                  {l.status}
+                                </span>
+                                <span className="text-[10px] text-gray-500 truncate max-w-[120px]">{l.stage}</span>
+                              </div>
+                              <div className="text-xs font-semibold text-emerald-600">
+                                {l.quote ? `Teklif: ${l.quote}` : <span className="text-gray-400 font-normal">Teklif Yok</span>}
+                              </div>
+                            </div>
+                          </td>
                           <td className="px-4 py-2 border-r border-gray-100 text-xs text-gray-700">{appUsers.find(u => u.id === l.owner_id)?.username || "Atanmamış"}</td>
                           <td className="px-4 py-2 sticky right-0 bg-white group-hover:bg-blue-50/60 z-10 border-l border-gray-200 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.03)]">
                             <div className="flex items-center justify-center gap-2">
@@ -763,15 +784,28 @@ export function App() {
             
             <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
               <div className="flex-1 p-6 overflow-y-auto custom-scrollbar border-r border-gray-200 flex flex-col bg-white">
-                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Müşteri Detayları</h4>
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Müşteri ve Kurum Detayları</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
-                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Ad Soyad</label><input type="text" className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.name} onChange={e => setLeadForm({...leadForm, name: e.target.value})} /></div>
-                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Telefon</label><div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} /><input type="text" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.phone} onChange={e => handlePhoneChange(e.target.value)} /></div></div>
-                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Dil</label><select className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.language} onChange={e => setLeadForm({...leadForm, language: e.target.value})}>{LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}</select></div>
-                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Kaynak</label><select className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.source} onChange={e => setLeadForm({...leadForm, source: e.target.value})}>{LEAD_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                  
+                  {/* Yeni Form Girişleri */}
+                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Ad Soyad</label><input type="text" className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.name || ""} onChange={e => setLeadForm({...leadForm, name: e.target.value})} /></div>
+                  
+                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Telefon</label><div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} /><input type="text" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.phone || ""} onChange={e => handlePhoneChange(e.target.value)} /></div></div>
+                  
+                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Mail Adresi</label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} /><input type="email" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.mailAdresi || ""} onChange={e => setLeadForm({...leadForm, mailAdresi: e.target.value})} /></div></div>
+                  
+                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Kurum Adı</label><div className="relative"><Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} /><input type="text" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.kurum || ""} onChange={e => setLeadForm({...leadForm, kurum: e.target.value})} /></div></div>
+                  
+                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Kurum Görevi</label><div className="relative"><Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} /><input type="text" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.kurumGorevi || ""} onChange={e => setLeadForm({...leadForm, kurumGorevi: e.target.value})} /></div></div>
+                  
+                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Kurum Tel No</label><div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} /><input type="text" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.kurumTelNo || ""} onChange={e => handleKurumPhoneChange(e.target.value)} /></div></div>
+                  
                   <div><label className="block text-xs font-medium text-gray-700 mb-1">Durum</label><select className="w-full px-3 py-2 border border-blue-300 rounded text-sm focus:outline-none focus:border-blue-500 bg-blue-50/50 text-blue-900 font-semibold" value={leadForm.status} onChange={e => setLeadForm({...leadForm, status: e.target.value})}>{LEAD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                  
                   <div><label className="block text-xs font-medium text-gray-700 mb-1">Alt Durum</label><select className="w-full px-3 py-2 border border-blue-300 rounded text-sm focus:outline-none focus:border-blue-500 bg-blue-50/50 text-blue-900 font-semibold" value={leadForm.stage} onChange={e => setLeadForm({...leadForm, stage: e.target.value})}>{LEAD_STAGES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                  
                   <div><label className="block text-xs font-medium text-gray-700 mb-1">Temsilci</label><select className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.owner_id} onChange={e => setLeadForm({...leadForm, owner_id: e.target.value})}><option value="">Seçiniz...</option>{appUsers.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}</select></div>
+                  
                   <div><label className="block text-xs font-medium text-gray-700 mb-1">Verilen Teklif</label><div className="relative"><CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} /><input type="text" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 font-semibold" value={leadForm.quote || ''} onChange={e => setLeadForm({...leadForm, quote: e.target.value})} /></div></div>
                 </div>
 
