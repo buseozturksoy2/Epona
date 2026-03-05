@@ -4,9 +4,6 @@ import React, { useEffect, useMemo, useState } from "react";
 // Vercel/GitHub'a yüklerken buradaki 'mock' yapıyı silip, kendi supabaseClient importunuzu kullanın:
 import { supabase } from "./supabaseClient";
 
-let authListener = null;
-const mockSession = { user: { id: "mock-admin-id", email: "admin@test.com" } };
-
 
 // =========================================================================
 import { 
@@ -59,6 +56,7 @@ const INTERACTION_TYPES = [
   "Telefon",
   "Mail",
   "Online toplantı",
+  "Dosya Yüklendi", // Dosya yükleme işlemini ayrı bir tür olarak ekleyelim
   "Diğer"
 ];
 
@@ -263,6 +261,8 @@ export function App() {
     
     let finalFileUrl = quote_file_url;
     let finalFileName = quote_file_name;
+    let newlyUploadedFileUrl = null;
+    let newlyUploadedFileName = null;
 
     // Eğer kullanıcı formda YENİ bir dosya seçtiyse, Supabase Storage'a yüklüyoruz:
     if (selectedFile) {
@@ -286,9 +286,11 @@ export function App() {
 
       finalFileUrl = publicUrl;
       finalFileName = selectedFile.name;
+      newlyUploadedFileUrl = publicUrl;
+      newlyUploadedFileName = selectedFile.name;
     }
 
-    // Dosya bilgilerini ana veriye ekliyoruz
+    // Dosya bilgilerini ana veriye ekliyoruz (Tablodaki "Aktif" dosyayı günceller)
     payloadToSave.quote_file_url = finalFileUrl;
     payloadToSave.quote_file_name = finalFileName;
 
@@ -309,16 +311,33 @@ export function App() {
 
     const currentLeadId = savedLead?.id || id;
 
+    // Eğer bir manuel not girilmişse onu normal şekilde kaydet
     if (pendingNote && pendingNote.trim() !== "" && currentLeadId) {
       const { error: noteError } = await supabase.from('lead_notes').insert([{
         lead_id: currentLeadId,
         text: pendingNote,
-        note_type: noteType, // Yeni Sütun
-        note_date: noteDate, // Yeni Sütun
+        note_type: noteType, 
+        note_date: noteDate, 
         author_id: currentUser?.id
       }]);
       if (noteError) console.error("Not kaydedilemedi:", noteError);
     }
+
+    // YENİ: Eğer bir dosya YÜKLENDİYSE, bunu da GEÇMİŞE ayrı bir not olarak ekle
+    if (newlyUploadedFileUrl && currentLeadId) {
+        const fileNoteText = `Yeni bir dosya yüklendi: ${newlyUploadedFileName}`;
+        
+        const { error: fileHistoryError } = await supabase.from('lead_notes').insert([{
+            lead_id: currentLeadId,
+            text: fileNoteText,
+            note_type: "Dosya Yüklendi",
+            note_date: new Date().toISOString().split('T')[0], // Bugünün tarihi
+            file_url: newlyUploadedFileUrl, // Geçmişteki dosyaya her zaman ulaşabilmek için url'i de notlar tablosuna ekliyoruz
+            author_id: currentUser?.id
+        }]);
+        if (fileHistoryError) console.error("Dosya geçmişe kaydedilemedi:", fileHistoryError);
+    }
+
 
     setIsModalOpen(false);
     fetchData();
@@ -794,7 +813,7 @@ export function App() {
                               <button onClick={() => { setUserForm({ id: u.id, username: u.username, role: u.role, active: u.active }); setIsUserModalOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded border border-transparent hover:border-blue-200 transition-colors" title="Kullanıcıyı Düzenle">
                                 <Edit size={16} />
                               </button>
-                              <button onClick={() => handleToggleUserStatus(u)} className={`p-1.5 rounded border border-transparent transition-colors ${u.active ? 'text-amber-600 hover:bg-amber-100 hover:border-amber-200' : 'text-emerald-600 hover:bg-emerald-100 hover:border-emerald-200'}`} title={u.active ? "Pasife Al (Erişimi Kes)" : "Aktif Et (Erişim Ver)"}>
+                              <button onClick={() => handleToggleUserStatus(u)} className={`p-1.5 rounded border border-transparent transition-colors ${u.active ? 'text-amber-600 hover:bg-amber-100 hover:border-amber-200' : 'textemerald-600 hover:bg-emerald-100 hover:border-emerald-200'}`} title={u.active ? "Pasife Al (Erişimi Kes)" : "Aktif Et (Erişim Ver)"}>
                                 {u.active ? <PowerOff size={16} /> : <Power size={16} />}
                               </button>
                               <button onClick={() => handleDeleteUser(u.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded border border-transparent hover:border-red-200 transition-colors" title="Kalıcı Olarak Sil">
@@ -979,6 +998,13 @@ export function App() {
                               </div>
                             )}
                             <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{n.text}</p>
+                            
+                            {/* GEÇMİŞTEKİ DOSYAYI GÖRÜNTÜLEME ALANI */}
+                            {n.file_url && (
+                                <a href={n.file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-2 p-1.5 bg-blue-50 rounded border border-blue-100 w-max" onClick={(e) => e.stopPropagation()}>
+                                  <FileText size={12} /> Dosyayı Görüntüle
+                                </a>
+                            )}
                           </div>
                         </div>
                       )
