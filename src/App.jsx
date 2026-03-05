@@ -62,7 +62,7 @@ const INTERACTION_TYPES = [
 
 const QUICK_FILTERS = [
   { id: "Sıcak", label: "🔥 Sıcak" },
-  { id: "Satıldı", label: "✅ Satıldı" },
+  { id: "İletişimde", label: "💬 İletişimde" },
   { id: "Bugün", label: "📅 Bugün" },
   { id: "Bu Ay", label: "📊 Bu Ay" },
   { id: "Son 3 Ay", label: "🕒 Son 3 Ay" }
@@ -406,7 +406,7 @@ export function App() {
         const today = new Date();
         
         if (quickFilter === "Sıcak") matchQuick = l.status === "Sıcak";
-        else if (quickFilter === "Satıldı") matchQuick = l.status === "Satış";
+        else if (quickFilter === "İletişimde") matchQuick = l.status === "İletişimde";
         else if (quickFilter === "Bugün") {
           matchQuick = createdDate.toDateString() === today.toDateString();
         } 
