@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 // Vercel/GitHub'a yüklerken buradaki 'mock' yapıyı silip, kendi supabaseClient importunuzu kullanın:
 import { supabase } from "./supabaseClient";
 
+
 // =========================================================================
 import { 
   LayoutDashboard, 
@@ -34,7 +35,17 @@ import {
 
 // --- CONSTANTS ---
 const LEAD_STATUSES = ["Yeni", "Cevapsız", "Sıcak", "Satış", "İptal", "Yabancı", "Türk", "Düşünüp Geri Dönüş Sağlayacak", "İletişimde", "İstanbul Dışı", "Randevu Verilen", "Randevu Gelen", "Randevu Gelmeyen", "Yanlış Başvuru"];
-const LEAD_STAGES = ["Çok Uzak", "Çok Pahalı", "Şişli Uzak", "Diğer"];
+
+// Yeni Teklif Durumu Seçenekleri (İhtiyacınıza göre burayı düzenleyebilirsiniz)
+const QUOTE_STATUSES = [
+  "Teklif Yok", 
+  "Fiyat İletildi", 
+  "Görüşme Aşamasında", 
+  "Sözleşme Gönderildi", 
+  "Kabul Edildi", 
+  "Reddedildi", 
+  "İptal"
+];
 
 const QUICK_FILTERS = [
   { id: "Sıcak", label: "🔥 Sıcak" },
@@ -54,9 +65,8 @@ function createEmptyLead(ownerId) {
     kurumGorevi: "", 
     kurumTelNo: "", 
     status: "Yeni", 
-    stage: "Diğer", 
+    quote: "Teklif Yok", // Artık Teklif Durumu olarak kullanılıyor
     owner_id: ownerId || "", 
-    quote: "", 
     pendingNote: "", 
     notes: [] 
   };
@@ -197,7 +207,8 @@ export function App() {
   };
 
   const handleEditLead = async (lead) => {
-    setLeadForm({ ...lead, pendingNote: "", notes: [] });
+    // Veritabanında eski aşama/stage kalıntıları varsa, formu ona göre temizleriz.
+    setLeadForm({ ...lead, quote: lead.quote || "Teklif Yok", pendingNote: "", notes: [] });
     setIsModalOpen(true);
 
     const { data: notesData, error } = await supabase
@@ -214,7 +225,8 @@ export function App() {
   };
 
   const handleSaveLead = async () => {
-    const { id, pendingNote, notes, created_at, updated_at, ...restOfLead } = leadForm;
+    // stage özelliğini yoksayıyoruz, veritabanına sadece gerekli alanları kaydediyoruz
+    const { id, pendingNote, notes, created_at, updated_at, stage, ...restOfLead } = leadForm;
     const payloadToSave = { ...restOfLead };
     
     if (id) {
@@ -271,11 +283,12 @@ export function App() {
       return; 
     }
     
-    const headers = ["İsim,Telefon,Mail Adresi,Kurum,Kurum Görevi,Kurum Tel No,Durum,Alt Durum,Teklif,Sahibi,Tarih"];
+    // Alt Durum kaldırıldı, Teklif -> Teklif Durumu oldu
+    const headers = ["İsim,Telefon,Mail Adresi,Kurum,Kurum Görevi,Kurum Tel No,Durum,Teklif Durumu,Sahibi,Tarih"];
     const rows = filteredLeads.map(l => {
       const ownerObj = appUsers.find(u => u.id === l.owner_id);
       const ownerName = ownerObj ? ownerObj.username : "Atanmamış";
-      return `${l.name || ''},${l.phone || ''},${l.mailAdresi || ''},${l.kurum || ''},${l.kurumGorevi || ''},${l.kurumTelNo || ''},${l.status || ''},${l.stage || ''},${l.quote || ''},${ownerName},${l.created_at || ''}`;
+      return `${l.name || ''},${l.phone || ''},${l.mailAdresi || ''},${l.kurum || ''},${l.kurumGorevi || ''},${l.kurumTelNo || ''},${l.status || ''},${l.quote || ''},${ownerName},${l.created_at || ''}`;
     });
     
     const csvData = headers.concat(rows).join("\n");
@@ -603,14 +616,11 @@ export function App() {
                           </td>
                           <td className="px-4 py-2 border-r border-gray-100">
                             <div className="flex flex-col gap-1.5 items-start">
-                              <div className="flex items-center gap-1.5">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${l.status === 'Yeni' ? 'bg-blue-100 text-blue-800 border border-blue-200' : l.status === 'Sıcak' ? 'bg-amber-100 text-amber-800 border border-amber-200' : l.status === 'İptal' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
-                                  {l.status}
-                                </span>
-                                <span className="text-[10px] text-gray-500 truncate max-w-[120px]">{l.stage}</span>
-                              </div>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${l.status === 'Yeni' ? 'bg-blue-100 text-blue-800 border border-blue-200' : l.status === 'Sıcak' ? 'bg-amber-100 text-amber-800 border border-amber-200' : l.status === 'İptal' ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
+                                {l.status}
+                              </span>
                               <div className="text-xs font-semibold text-emerald-600">
-                                {l.quote ? `Teklif: ${l.quote}` : <span className="text-gray-400 font-normal">Teklif Yok</span>}
+                                {l.quote !== 'Teklif Yok' ? l.quote : <span className="text-gray-400 font-normal">Teklif Yok</span>}
                               </div>
                             </div>
                           </td>
@@ -794,19 +804,25 @@ export function App() {
                   
                   <div><label className="block text-xs font-medium text-gray-700 mb-1">Mail Adresi</label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} /><input type="email" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.mailAdresi || ""} onChange={e => setLeadForm({...leadForm, mailAdresi: e.target.value})} /></div></div>
                   
+                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Temsilci</label><select className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.owner_id} onChange={e => setLeadForm({...leadForm, owner_id: e.target.value})}><option value="">Seçiniz...</option>{appUsers.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}</select></div>
+
                   <div><label className="block text-xs font-medium text-gray-700 mb-1">Kurum Adı</label><div className="relative"><Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} /><input type="text" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.kurum || ""} onChange={e => setLeadForm({...leadForm, kurum: e.target.value})} /></div></div>
                   
                   <div><label className="block text-xs font-medium text-gray-700 mb-1">Kurum Görevi</label><div className="relative"><Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} /><input type="text" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.kurumGorevi || ""} onChange={e => setLeadForm({...leadForm, kurumGorevi: e.target.value})} /></div></div>
                   
                   <div><label className="block text-xs font-medium text-gray-700 mb-1">Kurum Tel No</label><div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} /><input type="text" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.kurumTelNo || ""} onChange={e => handleKurumPhoneChange(e.target.value)} /></div></div>
                   
+                  {/* Eski Alt Durum kaldırıldı, Durum yerinde */}
                   <div><label className="block text-xs font-medium text-gray-700 mb-1">Durum</label><select className="w-full px-3 py-2 border border-blue-300 rounded text-sm focus:outline-none focus:border-blue-500 bg-blue-50/50 text-blue-900 font-semibold" value={leadForm.status} onChange={e => setLeadForm({...leadForm, status: e.target.value})}>{LEAD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                   
-                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Alt Durum</label><select className="w-full px-3 py-2 border border-blue-300 rounded text-sm focus:outline-none focus:border-blue-500 bg-blue-50/50 text-blue-900 font-semibold" value={leadForm.stage} onChange={e => setLeadForm({...leadForm, stage: e.target.value})}>{LEAD_STAGES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                  
-                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Temsilci</label><select className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={leadForm.owner_id} onChange={e => setLeadForm({...leadForm, owner_id: e.target.value})}><option value="">Seçiniz...</option>{appUsers.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}</select></div>
-                  
-                  <div><label className="block text-xs font-medium text-gray-700 mb-1">Verilen Teklif</label><div className="relative"><CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} /><input type="text" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 font-semibold" value={leadForm.quote || ''} onChange={e => setLeadForm({...leadForm, quote: e.target.value})} /></div></div>
+                  {/* Verilen Teklif inputu yerine yeni Teklif Durumu seçimi eklendi */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Teklif Durumu</label>
+                    <select className="w-full px-3 py-2 border border-emerald-300 rounded text-sm focus:outline-none focus:border-emerald-500 bg-emerald-50/50 text-emerald-900 font-semibold" value={leadForm.quote || 'Teklif Yok'} onChange={e => setLeadForm({...leadForm, quote: e.target.value})}>
+                      {QUOTE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+
                 </div>
 
                 <div className="mt-6 pt-4 border-t border-gray-200 shrink-0">
