@@ -86,6 +86,7 @@ export function App() {
   const [leads, setLeads] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("Tümü");
+  const [filterOwner, setFilterOwner] = useState("Tümü"); // Yeni Temsilci Filtresi
   const [quickFilter, setQuickFilter] = useState(""); 
   
   const [selectedLeadIds, setSelectedLeadIds] = useState([]);
@@ -315,6 +316,7 @@ export function App() {
         l.mailAdresi?.toLowerCase().includes(searchQuery.toLowerCase())
       );
       const matchStatus = filterStatus === "Tümü" || l.status === filterStatus;
+      const matchOwner = filterOwner === "Tümü" || l.owner_id === filterOwner; // Temsilci filtre eşleşmesi
       
       let matchQuick = true;
       if (quickFilter) {
@@ -336,9 +338,9 @@ export function App() {
         }
       }
       
-      return matchSearch && matchStatus && matchQuick;
+      return matchSearch && matchStatus && matchOwner && matchQuick;
     });
-  }, [leads, searchQuery, filterStatus, quickFilter]);
+  }, [leads, searchQuery, filterStatus, filterOwner, quickFilter]); // filterOwner eklendi
 
   // --- USER FUNCTIONS ---
   const handleSaveUser = async () => {
@@ -554,6 +556,14 @@ export function App() {
                   <select className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                     <option value="Tümü">Tümü</option>
                     {LEAD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                {/* YENİ EKLENEN TEMSİLCİ FİLTRESİ */}
+                <div className="w-full sm:w-48">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Temsilci</label>
+                  <select className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500" value={filterOwner} onChange={e => setFilterOwner(e.target.value)}>
+                    <option value="Tümü">Tümü</option>
+                    {appUsers.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
                   </select>
                 </div>
               </div>
