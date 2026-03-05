@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 
 // --- CONSTANTS ---
-const LEAD_STATUSES = ["Yeni", "Cevapsız", "Sıcak", "Satış", "İptal", "Yabancı", "Türk", "Düşünüp Geri Dönüş Sağlayacak", "İletişimde", "İstanbul Dışı", "Randevu Verilen", "Randevu Gelen", "Randevu Gelmeyen", "Yanlış Başvuru"];
+const LEAD_STATUSES = ["Yeni", "Cevapsız", "Sıcak", "Soğuk", "İptal", "Düşünüyor", "Soğuk", "İletişimde"];
 
 // Yeni Teklif Durumu Seçenekleri (İhtiyacınıza göre burayı düzenleyebilirsiniz)
 const QUOTE_STATUSES = [
