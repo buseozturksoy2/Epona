@@ -4,6 +4,9 @@ import React, { useEffect, useMemo, useState } from "react";
 // Vercel/GitHub'a yüklerken buradaki 'mock' yapıyı silip, kendi supabaseClient importunuzu kullanın:
 import { supabase } from "./supabaseClient";
 
+let authListener = null;
+const mockSession = { user: { id: "mock-admin-id", email: "admin@test.com" } };
+
 
 // =========================================================================
 import { 
@@ -30,7 +33,9 @@ import {
   Info,
   Mail,
   Building,
-  Briefcase
+  Briefcase,
+  Paperclip,
+  FileText
 } from "lucide-react";
 
 // --- CONSTANTS ---
@@ -77,6 +82,9 @@ function createEmptyLead(ownerId) {
     status: "Yeni", 
     stage: "Diğer", 
     quote: "Teklif Yok", 
+    quote_file_url: null, // Veritabanından gelen URL
+    quote_file_name: null, // Veritabanından gelen Dosya Adı
+    selectedFile: null, // Formda seçilen yeni dosya (State için)
     owner_id: ownerId || "", 
     noteType: "Telefon", // Varsayılan görüşme türü
     noteDate: new Date().toISOString().split('T')[0], // Bugünün tarihi (YYYY-MM-DD)
@@ -224,7 +232,10 @@ export function App() {
     setLeadForm({ 
       ...lead, 
       stage: lead.stage || "Diğer", 
-      quote: lead.quote || "Teklif Yok", 
+      quote: lead.quote || "Teklif Yok",
+      quote_file_url: lead.quote_file_url || null,
+      quote_file_name: lead.quote_file_name || null,
+      selectedFile: null, // Edit açılışında dosya sıfırlanır (yeni dosya seçimi için) 
       noteType: "Telefon", // Edit yaparken not kısmı sıfırlanır
       noteDate: new Date().toISOString().split('T')[0],
       pendingNote: "", 
@@ -246,10 +257,41 @@ export function App() {
   };
 
   const handleSaveLead = async () => {
-    // noteType ve noteDate alanlarını da restOfLead dışına alıyoruz (leads tablosuna gitmemesi için)
-    const { id, pendingNote, noteType, noteDate, notes, created_at, updated_at, ...restOfLead } = leadForm;
+    // Form verilerini parçalıyoruz, geçici verileri (selectedFile vb.) API'ye göndermeyeceğiz.
+    const { id, pendingNote, noteType, noteDate, notes, created_at, updated_at, selectedFile, quote_file_url, quote_file_name, ...restOfLead } = leadForm;
     const payloadToSave = { ...restOfLead };
     
+    let finalFileUrl = quote_file_url;
+    let finalFileName = quote_file_name;
+
+    // Eğer kullanıcı formda YENİ bir dosya seçtiyse, Supabase Storage'a yüklüyoruz:
+    if (selectedFile) {
+      const fileExt = selectedFile.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `quote-files/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('lead_files') // Supabase'deki Bucket Adı
+        .upload(filePath, selectedFile);
+
+      if (uploadError) {
+        alert("Dosya yüklenirken hata oluştu: " + uploadError.message);
+        return;
+      }
+
+      // Yüklenen dosyanın herkese açık (Public) linkini alıyoruz
+      const { data: { publicUrl } } = supabase.storage
+        .from('lead_files')
+        .getPublicUrl(filePath);
+
+      finalFileUrl = publicUrl;
+      finalFileName = selectedFile.name;
+    }
+
+    // Dosya bilgilerini ana veriye ekliyoruz
+    payloadToSave.quote_file_url = finalFileUrl;
+    payloadToSave.quote_file_name = finalFileName;
+
     if (id) {
       payloadToSave.id = id;
     }
@@ -306,11 +348,11 @@ export function App() {
       return; 
     }
     
-    const headers = ["İsim,Telefon,Mail Adresi,Kurum,Kurum Görevi,Kurum Tel No,Durum,Alt Durum,Teklif Durumu,Sahibi,Tarih"];
+    const headers = ["İsim,Telefon,Mail Adresi,Kurum,Kurum Görevi,Kurum Tel No,Durum,Alt Durum,Teklif Durumu,Teklif Dosyası,Sahibi,Tarih"];
     const rows = filteredLeads.map(l => {
       const ownerObj = appUsers.find(u => u.id === l.owner_id);
       const ownerName = ownerObj ? ownerObj.username : "Atanmamış";
-      return `${l.name || ''},${l.phone || ''},${l.mailAdresi || ''},${l.kurum || ''},${l.kurumGorevi || ''},${l.kurumTelNo || ''},${l.status || ''},${l.stage || ''},${l.quote || ''},${ownerName},${l.created_at || ''}`;
+      return `${l.name || ''},${l.phone || ''},${l.mailAdresi || ''},${l.kurum || ''},${l.kurumGorevi || ''},${l.kurumTelNo || ''},${l.status || ''},${l.stage || ''},${l.quote || ''},${l.quote_file_url || ''},${ownerName},${l.created_at || ''}`;
     });
     
     const csvData = headers.concat(rows).join("\n");
@@ -653,8 +695,16 @@ export function App() {
                                 </span>
                                 {l.stage && <span className="text-[10px] text-gray-500 truncate max-w-[120px]">{l.stage}</span>}
                               </div>
-                              <div className="text-xs font-semibold text-emerald-600">
-                                {l.quote !== 'Teklif Yok' ? l.quote : <span className="text-gray-400 font-normal">Teklif Yok</span>}
+                              <div>
+                                <div className="text-xs font-semibold text-emerald-600">
+                                  {l.quote !== 'Teklif Yok' ? l.quote : <span className="text-gray-400 font-normal">Teklif Yok</span>}
+                                </div>
+                                {/* Yeni: Dosya Linki Görünümü */}
+                                {l.quote_file_url && (
+                                  <a href={l.quote_file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-1 underline w-max" onClick={(e) => e.stopPropagation()}>
+                                    <FileText size={10} /> Dosyayı Gör
+                                  </a>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -862,6 +912,23 @@ export function App() {
                     </select>
                   </div>
 
+                  {/* YENİ: DOSYA YÜKLEME ALANI */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Teklif Dosyası Yükle (PDF, Word vb.)</label>
+                    <input 
+                      type="file" 
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-300 rounded cursor-pointer"
+                      onChange={e => setLeadForm({...leadForm, selectedFile: e.target.files[0]})}
+                    />
+                    {/* Veritabanında zaten kayıtlı bir dosya varsa ismini gösterelim */}
+                    {leadForm.quote_file_name && !leadForm.selectedFile && (
+                      <div className="mt-1.5 text-[11px] text-emerald-600 flex items-center gap-1 font-medium">
+                        <Paperclip size={12} /> Mevcut Dosya: {leadForm.quote_file_name}
+                      </div>
+                    )}
+                  </div>
+
                 </div>
 
                 <div className="mt-6 pt-4 border-t border-gray-200 shrink-0">
@@ -925,7 +992,8 @@ export function App() {
             
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3 shrink-0">
               <button onClick={() => setIsModalOpen(false)} className="px-5 py-2 border border-gray-300 text-gray-700 bg-white rounded text-sm font-medium hover:bg-gray-100 hover:text-gray-900 transition-colors shadow-sm">Vazgeç</button>
-              <button onClick={handleSaveLead} className="px-6 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"><CheckSquare size={16} /> Değişiklikleri Kaydet</button>
+              {/* BUTON METNİ GÜNCELLENDİ */}
+              <button onClick={handleSaveLead} className="px-6 py-2 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2"><CheckSquare size={16} /> Kaydet</button>
             </div>
           </div>
         </div>
