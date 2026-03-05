@@ -48,6 +48,15 @@ const QUOTE_STATUSES = [
   "İptal"
 ];
 
+// Yeni Görüşme Türleri
+const INTERACTION_TYPES = [
+  "Ofis ziyareti",
+  "Telefon",
+  "Mail",
+  "Online toplantı",
+  "Diğer"
+];
+
 const QUICK_FILTERS = [
   { id: "Sıcak", label: "🔥 Sıcak" },
   { id: "Satıldı", label: "✅ Satıldı" },
@@ -66,9 +75,11 @@ function createEmptyLead(ownerId) {
     kurumGorevi: "", 
     kurumTelNo: "", 
     status: "Yeni", 
-    stage: "Diğer", // Alt durum geri eklendi
-    quote: "Teklif Yok", // Artık Teklif Durumu olarak kullanılıyor
+    stage: "Diğer", 
+    quote: "Teklif Yok", 
     owner_id: ownerId || "", 
+    noteType: "Telefon", // Varsayılan görüşme türü
+    noteDate: new Date().toISOString().split('T')[0], // Bugünün tarihi (YYYY-MM-DD)
     pendingNote: "", 
     notes: [] 
   };
@@ -88,7 +99,7 @@ export function App() {
   const [leads, setLeads] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("Tümü");
-  const [filterOwner, setFilterOwner] = useState("Tümü"); // Yeni Temsilci Filtresi
+  const [filterOwner, setFilterOwner] = useState("Tümü");
   const [quickFilter, setQuickFilter] = useState(""); 
   
   const [selectedLeadIds, setSelectedLeadIds] = useState([]);
@@ -210,8 +221,15 @@ export function App() {
   };
 
   const handleEditLead = async (lead) => {
-    // Aşama dahil formu gerekli verilerle set ediyoruz.
-    setLeadForm({ ...lead, stage: lead.stage || "Diğer", quote: lead.quote || "Teklif Yok", pendingNote: "", notes: [] });
+    setLeadForm({ 
+      ...lead, 
+      stage: lead.stage || "Diğer", 
+      quote: lead.quote || "Teklif Yok", 
+      noteType: "Telefon", // Edit yaparken not kısmı sıfırlanır
+      noteDate: new Date().toISOString().split('T')[0],
+      pendingNote: "", 
+      notes: [] 
+    });
     setIsModalOpen(true);
 
     const { data: notesData, error } = await supabase
@@ -228,8 +246,8 @@ export function App() {
   };
 
   const handleSaveLead = async () => {
-    // stage özelliğinin Supabase'e kaydedilmesi için çıkarma işleminden kaldırdık
-    const { id, pendingNote, notes, created_at, updated_at, ...restOfLead } = leadForm;
+    // noteType ve noteDate alanlarını da restOfLead dışına alıyoruz (leads tablosuna gitmemesi için)
+    const { id, pendingNote, noteType, noteDate, notes, created_at, updated_at, ...restOfLead } = leadForm;
     const payloadToSave = { ...restOfLead };
     
     if (id) {
@@ -253,6 +271,8 @@ export function App() {
       const { error: noteError } = await supabase.from('lead_notes').insert([{
         lead_id: currentLeadId,
         text: pendingNote,
+        note_type: noteType, // Yeni Sütun
+        note_date: noteDate, // Yeni Sütun
         author_id: currentUser?.id
       }]);
       if (noteError) console.error("Not kaydedilemedi:", noteError);
@@ -286,7 +306,6 @@ export function App() {
       return; 
     }
     
-    // Alt Durum dışa aktarıma tekrar dahil edildi
     const headers = ["İsim,Telefon,Mail Adresi,Kurum,Kurum Görevi,Kurum Tel No,Durum,Alt Durum,Teklif Durumu,Sahibi,Tarih"];
     const rows = filteredLeads.map(l => {
       const ownerObj = appUsers.find(u => u.id === l.owner_id);
@@ -318,7 +337,7 @@ export function App() {
         l.mailAdresi?.toLowerCase().includes(searchQuery.toLowerCase())
       );
       const matchStatus = filterStatus === "Tümü" || l.status === filterStatus;
-      const matchOwner = filterOwner === "Tümü" || l.owner_id === filterOwner; // Temsilci filtre eşleşmesi
+      const matchOwner = filterOwner === "Tümü" || l.owner_id === filterOwner;
       
       let matchQuick = true;
       if (quickFilter) {
@@ -342,7 +361,7 @@ export function App() {
       
       return matchSearch && matchStatus && matchOwner && matchQuick;
     });
-  }, [leads, searchQuery, filterStatus, filterOwner, quickFilter]); // filterOwner eklendi
+  }, [leads, searchQuery, filterStatus, filterOwner, quickFilter]);
 
   // --- USER FUNCTIONS ---
   const handleSaveUser = async () => {
@@ -829,7 +848,6 @@ export function App() {
                   
                   <div><label className="block text-xs font-medium text-gray-700 mb-1">Durum</label><select className="w-full px-3 py-2 border border-blue-300 rounded text-sm focus:outline-none focus:border-blue-500 bg-blue-50/50 text-blue-900 font-semibold" value={leadForm.status} onChange={e => setLeadForm({...leadForm, status: e.target.value})}>{LEAD_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                   
-                  {/* GERİ EKLENEN ALT DURUM SEÇİMİ */}
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Alt Durum</label>
                     <select className="w-full px-3 py-2 border border-blue-300 rounded text-sm focus:outline-none focus:border-blue-500 bg-blue-50/50 text-blue-900 font-semibold" value={leadForm.stage} onChange={e => setLeadForm({...leadForm, stage: e.target.value})}>
@@ -848,7 +866,24 @@ export function App() {
 
                 <div className="mt-6 pt-4 border-t border-gray-200 shrink-0">
                   <label className="flex items-center gap-1.5 text-xs font-bold text-blue-700 mb-2"><MessageSquare size={14} /> YENİ GÖRÜŞME NOTU EKLE</label>
-                  <textarea rows="3" className="w-full px-3 py-2 border border-blue-200 rounded text-sm focus:outline-none focus:border-blue-500 resize-none bg-blue-50/30 text-gray-800" value={leadForm.pendingNote} onChange={e => setLeadForm({...leadForm, pendingNote: e.target.value})}></textarea>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <label className="block text-[10px] font-medium text-gray-500 mb-1 uppercase">Görüşme Türü</label>
+                        <select className="w-full px-3 py-1.5 border border-blue-200 rounded text-sm focus:outline-none focus:border-blue-500 bg-blue-50/30 text-blue-900" value={leadForm.noteType} onChange={e => setLeadForm({...leadForm, noteType: e.target.value})}>
+                          {INTERACTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-[10px] font-medium text-gray-500 mb-1 uppercase">Tarih</label>
+                        <input type="date" className="w-full px-3 py-1.5 border border-blue-200 rounded text-sm focus:outline-none focus:border-blue-500 bg-blue-50/30 text-blue-900" value={leadForm.noteDate} onChange={e => setLeadForm({...leadForm, noteDate: e.target.value})} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-medium text-gray-500 mb-1 uppercase">Görüşme Detayı</label>
+                      <textarea rows="2" className="w-full px-3 py-2 border border-blue-200 rounded text-sm focus:outline-none focus:border-blue-500 resize-none bg-blue-50/30 text-gray-800 placeholder-blue-300" placeholder="Görüşme detaylarını buraya yazın..." value={leadForm.pendingNote} onChange={e => setLeadForm({...leadForm, pendingNote: e.target.value})}></textarea>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -863,13 +898,21 @@ export function App() {
                       const noteAuthor = appUsers.find(u => u.id === n.author_id)?.username || "Bilinmiyor";
                       return (
                         <div key={n.id} className="bg-white p-3 rounded border border-gray-200 shadow-sm relative before:content-[''] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-blue-500 before:rounded-l">
-                          <div className="flex justify-between items-start mb-1.5 pl-2">
+                          <div className="flex justify-between items-start mb-1 pl-2">
                             <span className="text-[11px] font-bold text-blue-700">{noteAuthor}</span>
                             <span className="text-[10px] text-gray-500 font-medium">
                               {new Date(n.created_at).toLocaleDateString('tr-TR')} {new Date(n.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
-                          <p className="text-xs text-gray-700 whitespace-pre-wrap pl-2 leading-relaxed">{n.text}</p>
+                          <div className="pl-2">
+                            {n.note_type && n.note_date && (
+                              <div className="mb-1 mt-0.5 flex items-center flex-wrap gap-1">
+                                <span className="inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">{n.note_type}</span>
+                                <span className="inline-block text-gray-500 text-[10px] font-medium">{new Date(n.note_date).toLocaleDateString('tr-TR')}</span>
+                              </div>
+                            )}
+                            <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{n.text}</p>
+                          </div>
                         </div>
                       )
                     })
